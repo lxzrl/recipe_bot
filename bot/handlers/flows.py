@@ -30,7 +30,7 @@ MENU_FILTER = filters.Text(MENU_BUTTONS)
 TEXT_INPUT = filters.TEXT & ~filters.COMMAND & ~MENU_FILTER
 
 FLOW = {
-    "own": ["title", "photos", "ingredients", "steps", "tags"],
+    "own": ["title", "photos", "ingredients", "steps", "cook_time", "servings", "tags"],
     "found": ["photos", "title", "tags", "notes"],
 }
 PROMPTS = {
@@ -41,6 +41,8 @@ PROMPTS = {
         "картофель — 500 г\nлук — 1 шт\nсоль по вкусу"
     ),
     ("own", "steps"): "👩‍🍳 Опишите приготовление (можно по шагам, каждый с новой строки).",
+    ("own", "cook_time"): "⏱ Сколько времени занимает готовка? Например: 40 мин или 1 ч 30 мин.",
+    ("own", "servings"): "🍽 На сколько порций? Например: 4 или 4–6.",
     ("found", "photos"): (
         "📷 Пришлите фото или скриншоты рецепта (можно несколько). Когда закончите — нажмите «Дальше»."
     ),
@@ -57,8 +59,12 @@ FIELD_NAMES = {
     "steps": "Приготовление",
     "notes": "Заметки",
     "source": "Источник",
+    "cook_time": "Время готовки",
+    "servings": "Порции",
     "tags": "Теги",
 }
+SHORT_FIELDS = ("cook_time", "servings")
+SHORT_LIMIT = 60
 CANCEL_BUTTON = InlineKeyboardButton("✖️ Отмена", callback_data="a:cancel")
 
 
@@ -73,6 +79,8 @@ def _new_draft(kind: str) -> dict:
         "ingredients": "",
         "steps": "",
         "notes": "",
+        "cook_time": "",
+        "servings": "",
         "tags": [],
         "photos": [],
         "last_group": None,
@@ -196,6 +204,9 @@ async def add_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if field == "title" and len(text) > 200:
         await update.message.reply_text("Слишком длинное название — уложитесь в 200 символов.")
         return ADD
+    if field in SHORT_FIELDS and len(text) > SHORT_LIMIT:
+        await update.message.reply_text(f"Слишком длинно — уложитесь в {SHORT_LIMIT} символов.")
+        return ADD
     # В заметки уже могли попасть подписи к фото — дописываем, а не затираем.
     draft[field] = (draft["notes"] + "\n" + text).strip() if field == "notes" else text
     return await _advance(update.message, context)
@@ -245,6 +256,8 @@ async def _save(message: Message, context: ContextTypes.DEFAULT_TYPE) -> int:
         ingredients=draft["ingredients"],
         steps=draft["steps"],
         notes=draft["notes"],
+        cook_time=draft["cook_time"],
+        servings=draft["servings"],
         tags=draft["tags"],
         photos=draft["photos"],
     )
@@ -305,6 +318,9 @@ async def edit_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     field = edit["field"]
     if field == "title" and (value == "-" or len(value) > 200):
         await update.message.reply_text("Название не может быть пустым и длиннее 200 символов.")
+        return EDIT_TEXT
+    if field in SHORT_FIELDS and len(value) > SHORT_LIMIT:
+        await update.message.reply_text(f"Слишком длинно — уложитесь в {SHORT_LIMIT} символов.")
         return EDIT_TEXT
     if value == "-":
         value = ""

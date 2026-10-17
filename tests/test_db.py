@@ -1,3 +1,5 @@
+import sqlite3
+
 from bot.db import Database, parse_tags
 
 
@@ -70,3 +72,29 @@ def test_delete_cascades():
     assert db.get_recipe(rid) is None
     assert db.list_tags() == []
     assert db.conn.execute("SELECT COUNT(*) FROM photos").fetchone()[0] == 0
+
+
+def test_time_and_servings():
+    db = make_db()
+    rid = db.add_recipe("own", "Плов", 1, "Аня", cook_time="1 ч", servings="6")
+    db.update_field(rid, "servings", "8")
+    r = db.get_recipe(rid)
+    assert (r.cook_time, r.servings) == ("1 ч", "8")
+
+
+def test_migrates_old_database(tmp_path):
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute(
+        """CREATE TABLE recipes (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+           title TEXT NOT NULL, ingredients TEXT NOT NULL DEFAULT '', steps TEXT NOT NULL DEFAULT '',
+           notes TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', author_id INTEGER NOT NULL,
+           author_name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+           updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, search_text TEXT NOT NULL DEFAULT '')"""
+    )
+    old.execute("INSERT INTO recipes (kind, title, author_id, author_name) VALUES ('own', 'Старый', 1, 'A')")
+    old.commit()
+    old.close()
+    db = Database(path)
+    r = db.get_recipe(1)
+    assert (r.title, r.cook_time, r.servings) == ("Старый", "", "")

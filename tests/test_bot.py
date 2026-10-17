@@ -143,14 +143,17 @@ def test_add_own_recipe(h):
     h.button(ADMIN, "a:next")
     h.text(ADMIN, "свёкла 2 шт\nкапуста")
     h.text(ADMIN, "Варить час")
+    h.text(ADMIN, "1 ч 30 мин")
+    h.button(ADMIN, "a:next")  # порции пропущены
     h.text(ADMIN, "суп, обед")
     assert "Сохранено" in "".join(h.tg.texts())
 
     [brief] = h.db.list_recipes(kind="own")[0]
     r = h.db.get_recipe(brief.id)
-    assert (r.title, r.ingredients, r.steps, r.tags, r.photos) == (
-        "Борщ", "свёкла 2 шт\nкапуста", "Варить час", ["обед", "суп"], ["ph1", "ph2"]
+    assert (r.title, r.ingredients, r.steps, r.cook_time, r.servings, r.tags, r.photos) == (
+        "Борщ", "свёкла 2 шт\nкапуста", "Варить час", "1 ч 30 мин", "", ["обед", "суп"], ["ph1", "ph2"]
     )
+    assert any("⏱ 1 ч 30 мин" in t and "порций" not in t for t in h.tg.texts())
     assert any(n == "sendMediaGroup" for n, _ in h.tg.calls)
 
     h.tg.clear()
@@ -200,11 +203,17 @@ def test_edit_fields_and_photos(h):
     h.text(ADMIN, "суп, #свекла")
     h.button(ADMIN, f"ef:{rid}:notes")
     h.text(ADMIN, "-")
+    h.button(ADMIN, f"ef:{rid}:servings")
+    h.text(ADMIN, "x" * 61)  # слишком длинно — остаёмся в правке
+    h.text(ADMIN, "4–6")
     h.button(ADMIN, f"ef:{rid}:photos_replace")
     h.photo(ADMIN, "new1")
     h.button(ADMIN, "a:done")
     r = h.db.get_recipe(rid)
-    assert (r.title, r.tags, r.notes, r.photos) == ("Украинский борщ", ["свекла", "суп"], "", ["new1"])
+    assert (r.title, r.tags, r.notes, r.servings, r.photos) == (
+        "Украинский борщ", ["свекла", "суп"], "", "4–6", ["new1"]
+    )
+    assert any("🍽 порций: 4–6" in t for t in h.tg.texts())
 
     h.button(ADMIN, f"mv:{rid}")
     assert h.db.get_recipe(rid).kind == "found"

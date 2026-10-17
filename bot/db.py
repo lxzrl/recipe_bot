@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 KINDS = ("own", "found")
-TEXT_FIELDS = ("title", "ingredients", "steps", "notes", "source")
+TEXT_FIELDS = ("title", "ingredients", "steps", "notes", "source", "cook_time", "servings")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS recipes (
     steps       TEXT    NOT NULL DEFAULT '',
     notes       TEXT    NOT NULL DEFAULT '',
     source      TEXT    NOT NULL DEFAULT '',
+    cook_time   TEXT    NOT NULL DEFAULT '',
+    servings    TEXT    NOT NULL DEFAULT '',
     author_id   INTEGER NOT NULL,
     author_name TEXT    NOT NULL,
     created_at  TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -98,6 +100,8 @@ class Recipe:
     steps: str
     notes: str
     source: str
+    cook_time: str
+    servings: str
     author_id: int
     author_name: str
     created_at: str
@@ -123,6 +127,7 @@ class Database:
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
 
     def close(self) -> None:
@@ -198,6 +203,8 @@ class Database:
         steps: str = "",
         notes: str = "",
         source: str = "",
+        cook_time: str = "",
+        servings: str = "",
         tags: list[str] | None = None,
         photos: list[str] | None = None,
     ) -> int:
@@ -205,9 +212,10 @@ class Database:
             raise ValueError(f"unknown kind: {kind}")
         cur = self.conn.execute(
             """INSERT INTO recipes (kind, title, ingredients, steps, notes, source,
-                                    author_id, author_name)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (kind, title, ingredients, steps, notes, source, author_id, author_name),
+                                    cook_time, servings, author_id, author_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (kind, title, ingredients, steps, notes, source, cook_time, servings,
+             author_id, author_name),
         )
         recipe_id = cur.lastrowid
         self._set_tags(recipe_id, tags or [])
@@ -228,6 +236,8 @@ class Database:
             steps=row["steps"],
             notes=row["notes"],
             source=row["source"],
+            cook_time=row["cook_time"],
+            servings=row["servings"],
             author_id=row["author_id"],
             author_name=row["author_name"],
             created_at=row["created_at"],
@@ -318,6 +328,13 @@ class Database:
         return result
 
     # ---------- внутреннее ----------
+
+    def _migrate(self) -> None:
+        # Базы, созданные до появления полей «время» и «порции».
+        columns = {r["name"] for r in self.conn.execute("PRAGMA table_info(recipes)")}
+        for column in ("cook_time", "servings"):
+            if column not in columns:
+                self.conn.execute(f"ALTER TABLE recipes ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
 
     def _page(self, where: str, params: list, offset: int, limit: int):
         total = self.conn.execute(

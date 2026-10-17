@@ -29,7 +29,8 @@ MAIN_MENU = ReplyKeyboardMarkup(
 
 HELP_TEXT = (
     "<b>Как пользоваться</b>\n\n"
-    f"{BTN_ADD_OWN} — добавить своё блюдо: название, фото, ингредиенты, приготовление, теги.\n"
+    f"{BTN_ADD_OWN} — добавить своё блюдо: название, фото, ингредиенты, приготовление, "
+    "время, порции, теги.\n"
     f"{BTN_ADD_FOUND} — сохранить найденный рецепт: фото или скриншоты, название, теги, заметка.\n"
     f"{BTN_LIST_OWN} / {BTN_LIST_FOUND} — просмотр разделов.\n"
     f"{BTN_TAGS} — все теги, по нажатию — рецепты с этим тегом.\n"
@@ -61,6 +62,13 @@ def recipe_card(recipe: Recipe) -> list[str]:
     ]
     if recipe.tags:
         lines.append("🏷 " + " ".join("#" + escape(t.replace(" ", "_")) for t in recipe.tags))
+    facts = []
+    if recipe.cook_time.strip():
+        facts.append(f"⏱ {escape(recipe.cook_time.strip())}")
+    if recipe.servings.strip():
+        facts.append(f"🍽 порций: {escape(recipe.servings.strip())}")
+    if facts:
+        lines.append(" · ".join(facts))
     if recipe.photos:
         lines.append(f"📷 фото: {len(recipe.photos)}")
 
@@ -120,6 +128,7 @@ def edit_keyboard(recipe: Recipe) -> InlineKeyboardMarkup:
         [
             [b("Название", "title"), b("Теги", "tags")],
             [b("Ингредиенты", "ingredients"), b("Приготовление", "steps")],
+            [b("⏱ Время", "cook_time"), b("🍽 Порции", "servings")],
             [b("Заметки", "notes"), b("Источник", "source")],
             [b("📷 Добавить фото", "photos_add"), b("📷 Заменить фото", "photos_replace")],
             [InlineKeyboardButton(move_label, callback_data=f"mv:{rid}")],
